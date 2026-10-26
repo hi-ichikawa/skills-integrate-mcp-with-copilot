@@ -2,7 +2,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitiesList = document.getElementById("activities-list");
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
+  const signupContainer = document.getElementById("signup-container");
   const messageDiv = document.getElementById("message");
+  const userButton = document.getElementById("user-button");
+  const loginDialog = document.getElementById("login-dialog");
+  const closeLogin = document.getElementById("close-login");
+  const loginForm = document.getElementById("login-form");
+  const logoutButton = document.getElementById("logout-button");
+  const loginMessage = document.getElementById("login-message");
+  let isTeacherAuthenticated = false;
+  let teacherUsername = null;
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -30,7 +39,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span>${isTeacherAuthenticated ? `<button class="delete-btn" data-activity="${name}" data-email="${email}" aria-label="Unregister ${email}">❌</button>` : ""}</li>`
                   )
                   .join("")}
               </ul>
@@ -155,6 +164,90 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  function setLoginMessage(text, type) {
+    loginMessage.textContent = text;
+    loginMessage.className = `message ${type}`;
+    loginMessage.classList.remove("hidden");
+  }
+
+  function updateAdminState(authenticated, username = null) {
+    isTeacherAuthenticated = authenticated;
+    teacherUsername = username;
+    signupContainer.classList.toggle("hidden", !authenticated);
+    loginForm.classList.toggle("hidden", authenticated);
+    logoutButton.classList.toggle("hidden", !authenticated);
+    userButton.textContent = authenticated ? "✓" : "👤";
+    userButton.title = authenticated ? `Logged in as ${username}` : "Teacher login";
+    userButton.setAttribute("aria-label", userButton.title);
+  }
+
+  async function checkLoginStatus() {
+    try {
+      const response = await fetch("/auth/status", { credentials: "same-origin" });
+      const status = await response.json();
+      updateAdminState(status.authenticated, status.username);
+    } catch (error) {
+      updateAdminState(false);
+    }
+    fetchActivities();
+  }
+
+  userButton.addEventListener("click", () => {
+    loginDialog.classList.remove("hidden");
+    loginMessage.classList.add("hidden");
+  });
+
+  closeLogin.addEventListener("click", () => {
+    loginDialog.classList.add("hidden");
+  });
+
+  loginDialog.addEventListener("click", (event) => {
+    if (event.target === loginDialog) {
+      loginDialog.classList.add("hidden");
+    }
+  });
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const credentials = {
+      username: document.getElementById("username").value,
+      password: document.getElementById("password").value,
+    };
+
+    try {
+      const response = await fetch("/auth/login", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setLoginMessage(result.detail || "Login failed", "error");
+        return;
+      }
+
+      updateAdminState(true, result.username);
+      loginForm.reset();
+      loginDialog.classList.add("hidden");
+      fetchActivities();
+    } catch (error) {
+      setLoginMessage("Unable to log in. Please try again.", "error");
+    }
+  });
+
+  logoutButton.addEventListener("click", async () => {
+    try {
+      await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+      updateAdminState(false);
+      loginDialog.classList.add("hidden");
+      fetchActivities();
+    } catch (error) {
+      setLoginMessage("Unable to log out. Please try again.", "error");
+    }
+  });
+
   // Initialize app
-  fetchActivities();
+  checkLoginStatus();
 });
