@@ -148,13 +148,9 @@ def get_activities():
 def signup_for_activity(
     activity_name: str,
     email: str,
-    teacher_username: str = None,
-    request: Request = None,
+    request: Request,
 ):
-    if request:
-        teacher_username = get_current_teacher(
-            request.cookies.get("teacher_session")
-        )
+    get_current_teacher(request.cookies.get("teacher_session"))
     """Sign up a student for an activity"""
     # Validate activity exists
     if activity_name not in activities:
